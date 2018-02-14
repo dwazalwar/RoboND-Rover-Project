@@ -1,54 +1,74 @@
-[//]: # (Image References)
-[image_0]: ./misc/rover_image.jpg
-[![Udacity - Robotics NanoDegree Program](https://s3-us-west-1.amazonaws.com/udacity-robotics/Extra+Images/RoboND_flag.png)](https://www.udacity.com/robotics)
-# Search and Sample Return Project
+## Project: Search and Sample Return
+
+[image]: ./misc/rover_image.jpg
+![alt text][image]
+
+## Notebook Analysis ##
+This notebook contains the functions from the lesson and provides the scaffolding that we need to test out mapping methods.
+
+### Color Thresholding: ###
+
+Every image from Rover camera has 3 possible areas namely ground area or navigation terrain, obstacles and in some images, we have rock samples too. Color thresholding is used to get masks showing pixel locations for each of them. It is important to select threshold values in such a way, that overlap between these 3 regions is minimal in masks as they will decide finally how accurately Rover is able to navigate. Using interactive Matplotlib tool, threshold values for navigation terrain and rock samples were selected. Obstacle map was obtained by simply reversing navigation terrain map. Following are the values selected for the thresholds.
+
+Navigation Terrain = (160, 160, 160)
+Rock Samples Threshold = (100,100,50)
+
+Images shown below in Figure 1. display each individual maps for one such Rover camera image
+
+[image_1]: ./misc/ColorThresholding.png
+![alt text][image_1]
+### Figure 1. Color Thresholding ###
+
+### Process_Image Function: ###
+
+This function basically processes an image from Rover camera, computes map for navigable terrain, obstacle, and rocks (if any) and finally prepares a mosaic image with all 3 areas mapped in a different color.
+
+The first step is to perform a perspective transform on given image from Rover's camera and get it transformed to one where we are looking at the scene from top-down viewpoint. In unity simulator, we have reference grid defined where each grid cell represents 1 sq m on the ground. We select 4 source points in Rover's camera view and also then for same grid cell we define our destination points in top-down view too. In OpenCV then we use getPerspectiveTransform and warpPerspective to get our transform.
+
+After perspective transform, for each image, we use color thresholding on warped images to get masks for navigation terrain, obstacle and rock samples. The navigable map received after color thresholding needs to be converted back to Rover coordinate form. While doing this, calculations are performed keeping in mind Rover will be at the center bottom of the image.
+
+Figure 2. shows some of these steps just explained above.
+
+[image_2]: ./misc/CoordinateTransformation.png
+![alt text][image_2]
+### Figure 2. Coordinate Transformation ###
+
+Finally, we want to convert these navigation points in world coordinates to get an overall picture of the environment and also to find the quality of our Rover area mapping. We get 3 world maps one each for navigation, rocks and also obstacle. All these 3 maps are then used to update data.worldmap using different colors to generate a video output.
+
+## Autonomous Navigation and Mapping ##
+
+### Perception ###
+perception_step() function is very similar to process_image from notebook analysis and has only 2 more additional details added.
+
+In case of perspective transform, it is not necessarily correct every time and it is important to define this validity condition to improve the fidelity of the output. Mostly whenever roll and pitch angles are near zero, only those cases should be considered. However, we cannot use absolute zero too as then Rover will not navigate most of the time and mapped area will be very less. After careful experimental analysis, only positive pitch and roll angles with a tolerance of 0.5 degrees were considered valid for mapping.
+
+Another addition is finally we convert navigable area points to polar coordinate form. This is needed in decision step to find navigable direction for Rover and find a suitable path for Rover to move.
+
+### Decision ###
+After defining perception pipeline, we now have to use information from it and define our Rover steering. Decision step mainly has 3 possible scenarios: Forward, Stop and Stuck. To control overall Rover behavior, we modify its throttle, brake and steer setting.
+
+In Forward step, we know Rover has sufficient navigable terrain in front of it and the main task now is to find steering direction for Rover to move. We can use average angle obtained from our navigation points as one of possible steering angle. However, during the run, I found many times Rover keeps moving in a same circular area and also does not cover a good ground area. To make Rover more wall tracking, I have used an average of max and mean angles from navigation points. This helped to avoid those circular loops and also improved ground coverage. While navigating, we constantly keep track of the amount of terrain available in front, whenever we find it to be below the certain allowed threshold, we enable stop case and allow Rover to reorient itself. During forward motion, we usually set throttle to its allowed throttle_value and brake is released by setting it to 0.
+
+In Stop case, we know Rover does not have enough navigable terrain in front of it. We now keep changing its steer angle by +/- 15 degrees until it has crossed the navigation terrain threshold to make Rover move again. During the stop, we set brake and throttle to 0. Once we have enough terrain in front of Rover, we enable forward motion again.
+
+Sometimes I found Rover can get stuck. Therefore I added another set of conditions to get it out from such cases. Mainly we do this by setting throttle in a negative direction and also by changing steer angles. It takes time but once it gets off the obstacle area, we enable forward motion again.
+
+## Results ##
+
+Using above code changes and running Rover in a screen resolution of 1024 x 768 with Good graphics setting, I was able to get 96% environment mapped with a fidelity of around 76%. I was also able to locate all 6 rock samples in my final world map.
+
+## Future Enhancements ##
+
+As seen in the video of Rover run, there is still some room for additional improvements.
+
+Firstly, Rover navigation is still not smooth as I would like to have. 2-3 times it got stuck and took some time to get out of it. This needs to be avoided and care should be taken while getting steering direction.
+
+Secondly, I have not implemented yet picking of Rock samples part. I will be supporting this aspect later.
 
 
-![alt text][image_0] 
-
-This project is modeled after the [NASA sample return challenge](https://www.nasa.gov/directorates/spacetech/centennial_challenges/sample_return_robot/index.html) and it will give you first hand experience with the three essential elements of robotics, which are perception, decision making and actuation.  You will carry out this project in a simulator environment built with the Unity game engine.  
-
-## The Simulator
-The first step is to download the simulator build that's appropriate for your operating system.  Here are the links for [Linux](https://s3-us-west-1.amazonaws.com/udacity-robotics/Rover+Unity+Sims/Linux_Roversim.zip), [Mac](	https://s3-us-west-1.amazonaws.com/udacity-robotics/Rover+Unity+Sims/Mac_Roversim.zip), or [Windows](https://s3-us-west-1.amazonaws.com/udacity-robotics/Rover+Unity+Sims/Windows_Roversim.zip).  
-
-You can test out the simulator by opening it up and choosing "Training Mode".  Use the mouse or keyboard to navigate around the environment and see how it looks.
-
-## Dependencies
-You'll need Python 3 and Jupyter Notebooks installed to do this project.  The best way to get setup with these if you are not already is to use Anaconda following along with the [RoboND-Python-Starterkit](https://github.com/ryan-keenan/RoboND-Python-Starterkit). 
 
 
-Here is a great link for learning more about [Anaconda and Jupyter Notebooks](https://classroom.udacity.com/courses/ud1111)
 
-## Recording Data
-I've saved some test data for you in the folder called `test_dataset`.  In that folder you'll find a csv file with the output data for steering, throttle position etc. and the pathnames to the images recorded in each run.  I've also saved a few images in the folder called `calibration_images` to do some of the initial calibration steps with.  
 
-The first step of this project is to record data on your own.  To do this, you should first create a new folder to store the image data in.  Then launch the simulator and choose "Training Mode" then hit "r".  Navigate to the directory you want to store data in, select it, and then drive around collecting data.  Hit "r" again to stop data collection.
-
-## Data Analysis
-Included in the IPython notebook called `Rover_Project_Test_Notebook.ipynb` are the functions from the lesson for performing the various steps of this project.  The notebook should function as is without need for modification at this point.  To see what's in the notebook and execute the code there, start the jupyter notebook server at the command line like this:
-
-```sh
-jupyter notebook
-```
-
-This command will bring up a browser window in the current directory where you can navigate to wherever `Rover_Project_Test_Notebook.ipynb` is and select it.  Run the cells in the notebook from top to bottom to see the various data analysis steps.  
-
-The last two cells in the notebook are for running the analysis on a folder of test images to create a map of the simulator environment and write the output to a video.  These cells should run as-is and save a video called `test_mapping.mp4` to the `output` folder.  This should give you an idea of how to go about modifying the `process_image()` function to perform mapping on your data.  
-
-## Navigating Autonomously
-The file called `drive_rover.py` is what you will use to navigate the environment in autonomous mode.  This script calls functions from within `perception.py` and `decision.py`.  The functions defined in the IPython notebook are all included in`perception.py` and it's your job to fill in the function called `perception_step()` with the appropriate processing steps and update the rover map. `decision.py` includes another function called `decision_step()`, which includes an example of a conditional statement you could use to navigate autonomously.  Here you should implement other conditionals to make driving decisions based on the rover's state and the results of the `perception_step()` analysis.
-
-`drive_rover.py` should work as is if you have all the required Python packages installed. Call it at the command line like this: 
-
-```sh
-python drive_rover.py
-```  
-
-Then launch the simulator and choose "Autonomous Mode".  The rover should drive itself now!  It doesn't drive that well yet, but it's your job to make it better!  
-
-**Note: running the simulator with different choices of resolution and graphics quality may produce different results!  Make a note of your simulator settings in your writeup when you submit the project.**
-
-### Project Walkthrough
-If you're struggling to get started on this project, or just want some help getting your code up to the minimum standards for a passing submission, we've recorded a walkthrough of the basic implementation for you but **spoiler alert: this [Project Walkthrough Video](https://www.youtube.com/watch?v=oJA6QHDPdQw) contains a basic solution to the project!**.
 
 
